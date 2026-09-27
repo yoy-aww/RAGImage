@@ -1,0 +1,65 @@
+# ===== 敏感配置 =====
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== 运行时数据 =====
+# uploads/: 用户上传的书页图片，运行时生成
+uploads/
+!uploads/.gitkeep
+
+# data/: OCR 后的 chunks、TF-IDF 索引、题目 JSON，运行时生成
+data/
+!data/.gitkeep
+
+# ===== 日志 =====
+*.log
+logs/
+
+# ===== 测试 / 临时 =====
+*.tmp
+*.bak
+.cache/
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/

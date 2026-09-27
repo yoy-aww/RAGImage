@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAGImage · 拍照→知识库→出题</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1419; --panel: #1a1f2e; --border: #2d3349;
+    --text: #e4e7ef; --muted: #8892a8; --accent: #4d9fff;
+    --accent-2: #6fcf97; --danger: #ff6b6b; --warn: #ffa94d;
+  }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; line-height: 1.5;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+  }
+  header h1 { font-size: 22px; font-weight: 600; }
+  header h1 .accent { color: var(--accent); }
+  .stats { font-size: 13px; color: var(--muted); }
+  .stats span { color: var(--accent-2); margin: 0 6px; }
+
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 40px 20px; text-align: center; background: var(--panel);
+    cursor: pointer; transition: all .2s;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent); background: rgba(77,159,255,.06);
+  }
+  .upload-zone input { display: none; }
+  .upload-zone .icon { font-size: 40px; margin-bottom: 10px; }
+  .upload-zone .title { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+  .upload-zone .hint { font-size: 13px; color: var(--muted); }
+
+  .book-meta { display: flex; gap: 12px; margin: 16px 0; align-items: center; }
+  .book-meta input {
+    flex: 1; padding: 10px 14px; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+  }
+  .book-meta input:focus { outline: none; border-color: var(--accent); }
+  .book-meta label { font-size: 14px; color: var(--muted); white-space: nowrap; }
+
+  .btn {
+    padding: 10px 20px; background: var(--accent); color: white; border: none;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+  .btn.danger { background: var(--danger); }
+  .btn.success { background: var(--accent-2); color: #0a1f12; }
+
+  .tabs { display: flex; gap: 4px; margin: 24px 0 16px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 10px 18px; cursor: pointer; font-size: 14px; color: var(--muted);
+    border-bottom: 2px solid transparent; transition: all .15s;
+  }
+  .tab.active { color: var(--text); border-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+
+  .book-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .book-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; cursor: pointer; transition: border-color .15s;
+  }
+  .book-card:hover { border-color: var(--accent); }
+  .book-card h3 { font-size: 16px; margin-bottom: 6px; }
+  .book-card .meta { font-size: 13px; color: var(--muted); }
+  .book-card .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .book-card .actions .btn { padding: 6px 12px; font-size: 13px; }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty .icon { font-size: 50px; margin-bottom: 12px; opacity: .4; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin-top: 16px;
+  }
+  .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .panel-header h2 { font-size: 18px; }
+
+  .progress { margin: 12px 0; }
+  .progress-bar {
+    height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent); width: 0%; transition: width .3s;
+  }
+  .progress-text { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .qgen-controls { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .qgen-controls select, .qgen-controls input {
+    padding: 8px 12px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+  }
+
+  .question-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .question-card .q-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .question-card .q-num {
+    background: var(--accent); color: white; padding: 2px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; margin-right: 10px;
+  }
+  .question-card .q-diff {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: var(--border); color: var(--muted);
+  }
+  .q-diff.easy { background: rgba(111,207,151,.2); color: var(--accent-2); }
+  .q-diff.medium { background: rgba(255,169,77,.2); color: var(--warn); }
+  .q-diff.hard { background: rgba(255,107,107,.2); color: var(--danger); }
+  .question-card .q-text { font-size: 15px; margin-bottom: 14px; line-height: 1.6; }
+  .question-card .options { list-style: none; padding: 0; }
+  .question-card .options li {
+    padding: 10px 14px; margin-bottom: 8px; border-radius: 6px;
+    background: var(--panel); border: 1px solid var(--border); font-size: 14px;
+    cursor: pointer; transition: all .15s;
+  }
+  .question-card .options li:hover { border-color: var(--accent); }
+  .question-card .options li.correct { background: rgba(111,207,151,.15); border-color: var(--accent-2); }
+  .question-card .options li.wrong { background: rgba(255,107,107,.15); border-color: var(--danger); }
+  .question-card .options li .letter {
+    display: inline-block; width: 22px; height: 22px; line-height: 22px;
+    text-align: center; background: var(--bg); border-radius: 4px; margin-right: 10px;
+    font-weight: 600; font-size: 12px;
+  }
+  .question-card .explanation {
+    margin-top: 14px; padding: 12px 14px; background: rgba(77,159,255,.08);
+    border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0;
+    font-size: 13px; color: var(--muted);
+  }
+  .question-card .explanation strong { color: var(--text); }
+  .question-card .snippet {
+    margin-top: 8px; padding: 8px 12px; background: var(--bg); border-radius: 4px;
+    font-size: 12px; color: var(--muted); font-style: italic;
+    border-left: 2px solid var(--accent-2);
+  }
+
+  .text-view {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; max-height: 600px; overflow-y: auto; font-size: 14px;
+    line-height: 1.8; white-space: pre-wrap; word-break: break-word;
+  }
+  .text-view .page-mark {
+    display: block; color: var(--accent); font-weight: 600; margin-top: 12px;
+    padding: 4px 0; border-bottom: 1px dashed var(--border); margin-bottom: 8px;
+  }
+  .text-view .page-mark:first-child { margin-top: 0; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--panel); color: var(--text); padding: 12px 20px;
+    border-radius: 8px; border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    box-shadow: 0 4px 20px rgba(0,0,0,.3); z-index: 1000;
+    max-width: 400px; font-size: 14px;
+    opacity: 0; transform: translateY(20px); transition: all .3s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: var(--danger); }
+  .toast.success { border-left-color: var(--accent-2); }
+
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: var(--muted); }
+
+  .hidden { display: none !important; }
+  .flex { display: flex; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .mt-12 { margin-top: 12px; }
+  .mb-12 { margin-bottom: 12px; }
+  .flex-1 { flex: 1; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📚 <span class="accent">RAGImage</span> · 拍照 → 知识库 → 出题</h1>
+    <div class="stats" id="stats">加载中...</div>
+  </header>
+
+  <!-- 上传区 -->
+  <div class="section">
+    <div class="book-meta">
+      <label>📖 书名：</label>
+      <input type="text" id="bookId" placeholder="留空自动生成 (book_时间戳_xxxx)">
+    </div>
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon">📷</div>
+      <div class="title">点击或拖拽上传书页照片</div>
+      <div class="hint">支持多张，按上传顺序作为页码顺序。建议按页码顺序上传以获得最好的检索效果</div>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </div>
+    <div class="mt-12" id="progressArea" style="display:none;">
+      <div class="progress">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText">处理中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="books">📚 书籍</div>
+    <div class="tab" data-tab="text">📄 全文预览</div>
+    <div class="tab" data-tab="questions">❓ 题库</div>
+  </div>
+
+  <!-- 书籍列表 -->
+  <div id="tab-books" class="tab-content">
+    <div id="bookList"></div>
+  </div>
+
+  <!-- 全文预览 -->
+  <div id="tab-text" class="tab-content hidden">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 id="textTitle">全文预览</h2>
+        <button class="btn secondary" onclick="switchTab('books')">← 返回</button>
+      </div>
+      <div id="textContent" class="text-view">选择一本书查看内容</div>
+    </div>
+  </div>
+
+  <!-- 题库 -->
+  <div id="tab-questions" class="tab-content hidden">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 id="qTitle">题库</h2>
+        <div class="flex gap-12">
+          <button class="btn secondary" onclick="switchTab('books')">← 返回</button>
+        </div>
+      </div>
+      <div class="qgen-controls">
+        <label>难度：
+          <select id="difficulty">
+            <option value="mixed">混合</option>
+            <option value="easy">简单</option>
+            <option value="medium">中等</option>
+            <option value="hard">困难</option>
+          </select>
+        </label>
+        <label>题目数量：
+          <input type="number" id="numQ" value="3" min="1" max="20" style="width:70px">
+        </label>
+        <button class="btn" id="genBtn" onclick="generateQuestions()">🎲 出题</button>
+        <button class="btn secondary" onclick="loadQuestions()">🔄 刷新</button>
+      </div>
+      <div id="questionsList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';  // same origin
+let currentBookId = null;
+let currentQuestions = [];
+
+// ---------- helpers ----------
+function $(id) { return document.getElementById(id); }
+function toast(msg, type='') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 4000);
+}
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+  $('tab-' + name).classList.remove('hidden');
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+
+// ---------- API calls ----------
+async function api(path, opts={}) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({detail: res.statusText}));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
+}
+
+async function refreshStats() {
+  try {
+    const h = await api('/api/health');
+    $('stats').innerHTML = `模型: ${h.model} · 章节数: <span>${h.stats.chunks}</span> · 书数: <span>${h.stats.books.length}</span> · 总字数: <span>${h.stats.total_chars}</span>`;
+  } catch(e) {
+    $('stats').textContent = '后端不可用';
+  }
+}
+
+async function loadBooks() {
+  try {
+    const data = await api('/api/chunks');
+    const books = {};
+    for (const c of data.chunks) {
+      if (!books[c.book_id]) books[c.book_id] = {id: c.book_id, pages: 0, chars: 0};
+      books[c.book_id].pages = Math.max(books[c.book_id].pages, c.page_no);
+      books[c.book_id].chars += c.char_count;
+    }
+    const list = Object.values(books);
+    const container = $('bookList');
+    if (list.length === 0) {
+      container.innerHTML = `<div class="empty"><div class="icon">📚</div><div>还没有书籍，上传照片开始</div></div>`;
+      return;
+    }
+    container.innerHTML = '<div class="book-list">' + list.map(b => `
+      <div class="book-card" onclick="selectBook('${b.id}')">
+        <h3>📖 ${b.id}</h3>
+        <div class="meta">${b.pages} 页 · ${b.chars} 字</div>
+        <div class="actions">
+          <button class="btn secondary" onclick="event.stopPropagation();viewText('${b.id}')">📄 全文</button>
+          <button class="btn" onclick="event.stopPropagation();viewQuestions('${b.id}')">❓ 题库</button>
+          <button class="btn danger" onclick="event.stopPropagation();deleteBook('${b.id}')">🗑</button>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  } catch(e) {
+    toast('加载书籍失败: ' + e.message, 'error');
+  }
+}
+
+function selectBook(id) {
+  currentBookId = id;
+  viewQuestions(id);
+}
+
+async function viewText(id) {
+  currentBookId = id;
+  switchTab('text');
+  $('textTitle').textContent = `📄 ${id} - 全文`;
+  $('textContent').textContent = '加载中...';
+  try {
+    const data = await api('/api/books/' + id + '/text');
+    $('textContent').innerHTML = data.pages.map(p =>
+      `<div class="page-mark">【第 ${p.page_no} 页】</div>${escapeHtml(p.text).replace(/\n/g, '<br>')}<br>`
+    ).join('');
+  } catch(e) {
+    $('textContent').textContent = '加载失败: ' + e.message;
+  }
+}
+
+async function viewQuestions(id) {
+  currentBookId = id;
+  switchTab('questions');
+  $('qTitle').textContent = `❓ ${id} - 题库`;
+  await loadQuestions();
+}
+
+async function loadQuestions() {
+  if (!currentBookId) return;
+  $('questionsList').innerHTML = '加载中...';
+  try {
+    const data = await api('/api/books/' + currentBookId + '/questions');
+    currentQuestions = data.questions;
+    renderQuestions();
+  } catch(e) {
+    $('questionsList').innerHTML = '加载失败: ' + e.message;
+  }
+}
+
+function renderQuestions() {
+  if (currentQuestions.length === 0) {
+    $('questionsList').innerHTML = '<div class="empty"><div class="icon">📝</div><div>暂无题目，点击"出题"生成</div></div>';
+    return;
+  }
+  $('questionsList').innerHTML = currentQuestions.map((q, i) => `
+    <div class="question-card">
+      <div class="q-header">
+        <div><span class="q-num">Q${q.id}</span><span class="q-diff ${q.difficulty}">${q.difficulty}</span></div>
+      </div>
+      <div class="q-text">${escapeHtml(q.question)}</div>
+      <ul class="options">
+        ${q.options.map((opt, idx) => {
+          const letter = String.fromCharCode(65 + idx);
+          let cls = '';
+          if (q.answer === letter) cls = 'correct';
+          return `<li class="${cls}"><span class="letter">${letter}</span>${escapeHtml(opt)}</li>`;
+        }).join('')}
+      </ul>
+      <div class="explanation">
+        <strong>✅ 答案：${q.answer}</strong>
+        ${q.explanation ? '<br>' + escapeHtml(q.explanation) : ''}
+        ${q.source_snippet ? `<div class="snippet">📎 原文依据：${escapeHtml(q.source_snippet)}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function generateQuestions() {
+  if (!currentBookId) { toast('请先选择一本书', 'error'); return; }
+  const btn = $('genBtn');
+  btn.disabled = true; btn.textContent = '⏳ 生成中...';
+  $('questionsList').innerHTML = '<div class="empty"><div class="icon">⏳</div><div>正在生成题目，请稍候 (30-90秒)...</div></div>';
+  try {
+    const body = new URLSearchParams({
+      num_questions: $('numQ').value,
+      difficulty: $('difficulty').value,
+    });
+    const data = await api('/api/books/' + currentBookId + '/questions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body,
+    });
+    currentQuestions = data.questions;
+    renderQuestions();
+    toast(`✅ 生成 ${data.questions.length} 道题目`, 'success');
+  } catch(e) {
+    toast('出题失败: ' + e.message, 'error');
+    $('questionsList').innerHTML = '失败: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '🎲 出题';
+  }
+}
+
+async function deleteBook(id) {
+  if (!confirm(`确定删除书籍 "${id}"？`)) return;
+  try {
+    await api('/api/books/' + id + '/clear', {method: 'POST'});
+    toast('已删除', 'success');
+    await Promise.all([refreshStats(), loadBooks()]);
+  } catch(e) {
+    toast('删除失败: ' + e.message, 'error');
+  }
+}
+
+// ---------- Upload ----------
+const uploadZone = $('uploadZone');
+const fileInput = $('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+async function handleFiles(files) {
+  if (!files || files.length === 0) return;
+  const bookId = $('bookId').value.trim();
+  const formData = new FormData();
+  formData.append('book_id', bookId);
+  for (const f of files) formData.append('files', f);
+
+  $('progressArea').style.display = 'block';
+  $('progressText').textContent = `上传并 OCR ${files.length} 张...`;
+  $('progressFill').style.width = '30%';
+
+  try {
+    // Use XHR for upload progress
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', API + '/api/books');
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const pct = Math.round(e.loaded / e.total * 60) + 20;
+          $('progressFill').style.width = pct + '%';
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          $('progressFill').style.width = '100%';
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(xhr.responseText || 'HTTP ' + xhr.status));
+        }
+      };
+      xhr.onerror = () => reject(new Error('网络错误'));
+      xhr.send(formData);
+    });
+    toast('✅ 上传并 OCR 完成', 'success');
+    await Promise.all([refreshStats(), loadBooks()]);
+  } catch(e) {
+    toast('上传失败: ' + e.message, 'error');
+  } finally {
+    setTimeout(() => $('progressArea').style.display = 'none', 800);
+    fileInput.value = '';
+  }
+}
+
+// ---------- utils ----------
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- init ----------
+refreshStats();
+loadBooks();
+</script>
+</body>
+</html>
